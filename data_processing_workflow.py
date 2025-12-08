@@ -1,9 +1,11 @@
+import os.path
 from helper import *
 from plotter import *
 from processing import *
+from statistic_test import perform_paired_ttest
 
 
-def analyze_recording(filepath, axis='atotal'):
+def analyze_recording(filepath, axis='atotal', plot_results=True):
     """Analyze a single accelerometer recording files chosen axis."""
     df = load_accelerometer_data(filepath)
     print_data_summary(df)
@@ -31,13 +33,14 @@ def analyze_recording(filepath, axis='atotal'):
         print(f"  Artifacts removed:      {features['artifacts_removed']} ({features['artifacts_percent']:.2f}%)")
 
     # Generate plots
-    plot_raw_vs_filtered(time, raw, processed)
-    plot_processing_summary(time, raw, processed, freqs_fft, fft, freqs_psd, psd, features)
+    if plot_results:
+        plot_raw_vs_filtered(time, raw, processed)
+        plot_processing_summary(time, raw, processed, freqs_fft, fft, freqs_psd, psd, features)
 
-    return features, df
+    return features, processed
 
 
-def analyze_subject(subject_name, data_dir="./"):
+def analyze_subject(subject_name, data_dir=".//data//", plot_results=True):
     """Analyze all four conditions for a single subject."""
     conditions = {
         'rest': f'{data_dir}{subject_name} rest.csv',
@@ -65,7 +68,14 @@ def analyze_subject(subject_name, data_dir="./"):
             )
 
             results[condition] = {
-                'features': features,
+                'subject': subject_name,
+                'condition': condition,
+                'rms': features['rms'],
+                'peak_frequency': features['peak_frequency'],
+                'band_power_8_12': features['band_power_8_12'],
+                'band_power_3_8': features['band_power_3_8'],
+                'relative_power_8_12': features['relative_power_8_12'],
+                'total_power': features['total_power'],
                 'fs': fs,
                 'duration': df['time'].iloc[-1] - df['time'].iloc[0],
                 'n_samples': len(df)
@@ -77,27 +87,50 @@ def analyze_subject(subject_name, data_dir="./"):
             print(f"Error processing {condition}: {e}")
             continue
 
-    # Print summary of results
-    print_summary(results, subject_name)
-
-    # Generate comparison plot
-    plot_comparison(raw_data, processed_signals, psd_data, results, subject_name)
+    # Show summary and plots
+    if plot_results:
+        print_subject_summary(results, subject_name)
+        plot_subject_analysis_summary(raw_data, processed_signals, psd_data, results, subject_name)
 
     return results, raw_data, processed_signals, psd_data
 
 
+def analyze_all_subjects(subjects, data_dir):
+    """Aggregate  and analyze data from all subjects."""
+    all_results = []
+
+    for subject in subjects:
+        results, _, _, _ = analyze_subject(subject, data_dir, False)
+        for cond, data in results.items():
+            all_results.append(data)
+
+    all_results_df = pd.DataFrame(all_results)
+    print_overall_summary(all_results_df)
+
+    # Perform statistical analysis
+    ttest_results = perform_paired_ttest(all_results_df)
+    print_statistical_results(ttest_results, all_results_df)
+    plot_group_results(all_results_df, ttest_results)
+
+    return all_results_df, ttest_results
+
+
 if __name__ == "__main__":
-    # Set path to a single recording file
-    filepath = "data/Gema fat rest.csv"
-    # Choose axis to analyze
-    axis = "atotal"
+    # Set file paths and subject list
+    data_dir = ".//data//"
+    file_name = "Gema fat rest.csv"
+    filepath = os.path.join(data_dir, file_name)
+    subjects = ['Ari', 'Antonio', 'Candela', 'Carolina', 'Dani', 'Diego', 'Gema', 'Helena', 'Laura', 'Luis', 'María',
+                'Miguel', 'Raúl', 'Sánchez', 'Violeta']
+
     # Analyze single recording
-    features, df = analyze_recording(filepath, axis)
+    features, recording_df = analyze_recording(filepath, 'atotal', True)
 
-    # Set subject name for full analysis
-    subject_name = "Laura"
-    # Analyze all conditions for the subject
-    results, raw_data, processed_signals, psd_data = analyze_subject(subject_name, ".//data//")
+    # Analyze all conditions for the one subject
+    results, raw_data, processed_signals, psd_data = analyze_subject(subjects[0], data_dir, True)
 
-
+    # Aggregate data and calculate statistics across all subjects
+    all_data_df, ttest_results = analyze_all_subjects(subjects, data_dir)
+    all_data_df.to_csv('all_subjects_features.csv', index=False)
+    export_statistics(ttest_results, 'statistical_results.csv')
 

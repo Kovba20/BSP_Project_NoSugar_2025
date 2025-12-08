@@ -1,5 +1,4 @@
-from textwrap import shorten
-
+import numpy as np
 import matplotlib.pyplot as plt
 
 
@@ -140,7 +139,7 @@ def plot_processing_summary(time, raw, filtered, freqs_fft, fft_mag, freqs_psd, 
     plt.show()
 
 
-def plot_comparison(raw_data, processed_signals, psd_data, results, subject_name):
+def plot_subject_analysis_summary(raw_data, processed_signals, psd_data, results, subject_name):
     """Create comprehensive visualization for subject wide analysis."""
 
     fig = plt.figure(figsize=(16, 14))
@@ -199,7 +198,7 @@ def plot_comparison(raw_data, processed_signals, psd_data, results, subject_name
     for cond, label, color in zip(conditions, ['Rest\nBaseline', 'Post\nBaseline',
                                                'Rest\nFatigue', 'Post\nFatigue'], colors):
         if cond in results:
-            band_powers.append(results[cond]['features']['band_power_8_12'])
+            band_powers.append(results[cond]['band_power_8_12'])
             labels_short.append(label)
             bar_colors.append(color)
 
@@ -216,7 +215,7 @@ def plot_comparison(raw_data, processed_signals, psd_data, results, subject_name
     for cond, label, color in zip(conditions, ['Rest\nBaseline', 'Post\nBaseline',
                                                'Rest\nFatigue', 'Post\nFatigue'], colors):
         if cond in results:
-            rms_values.append(results[cond]['features']['rms'])
+            rms_values.append(results[cond]['rms'])
 
     bars = ax_rms.bar(range(len(rms_values)), rms_values, color=bar_colors, alpha=0.8, edgecolor='black')
     ax_rms.set_xticks(range(len(labels_short)))
@@ -236,21 +235,21 @@ def plot_comparison(raw_data, processed_signals, psd_data, results, subject_name
     for cond in conditions:
         if cond not in results:
             continue
-        f = results[cond]['features']
-        summary_lines.append(f"{cond:<18} {f['rms']:.4f}    {f['peak_frequency']:.2f}       {f['band_power_8_12']:.6f}")
+        r = results[cond]
+        summary_lines.append(f"{cond:<18} {r['rms']:.4f}    {r['peak_frequency']:.2f}       {r['band_power_8_12']:.6f}")
 
     summary_lines.append("")
     summary_lines.append("-" * 50)
 
     if 'post' in results and 'fat_post' in results:
-        bp = results['post']['features']['band_power_8_12']
-        fp = results['fat_post']['features']['band_power_8_12']
+        bp = results['post']['band_power_8_12']
+        fp = results['fat_post']['band_power_8_12']
         change = ((fp - bp) / bp) * 100
         summary_lines.append(f"Postural 8-12Hz change: {change:+.1f}%")
 
     if 'rest' in results and 'fat_rest' in results:
-        bp = results['rest']['features']['band_power_8_12']
-        fp = results['fat_rest']['features']['band_power_8_12']
+        bp = results['rest']['band_power_8_12']
+        fp = results['fat_rest']['band_power_8_12']
         change = ((fp - bp) / bp) * 100
         summary_lines.append(f"Resting 8-12Hz change:  {change:+.1f}%")
 
@@ -261,4 +260,102 @@ def plot_comparison(raw_data, processed_signals, psd_data, results, subject_name
 
     plt.suptitle(f'Finger Tremor Analysis - Subject: {subject_name}', fontsize=14, fontweight='bold')
     plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.show()
+
+
+def plot_group_results(df, ttest_results):
+    """Create visualization of group results."""
+    fig = plt.figure(figsize=(14, 10))
+
+    subjects = sorted(df['subject'].unique())
+    n_subjects = len(subjects)
+
+    # Plot 1: Individual subject 8-12 Hz band power (Postural)
+    ax1 = fig.add_subplot(2, 2, 1)
+    post_data = df[df['condition'] == 'post'].set_index('subject')['band_power_8_12']
+    fat_post_data = df[df['condition'] == 'fat_post'].set_index('subject')['band_power_8_12']
+
+    x = np.arange(n_subjects)
+    width = 0.35
+
+    baseline_vals = [post_data.get(s, 0) for s in subjects]
+    fatigue_vals = [fat_post_data.get(s, 0) for s in subjects]
+
+    ax1.bar(x - width / 2, baseline_vals, width, label='Baseline', color='#3498db', alpha=0.8)
+    ax1.bar(x + width / 2, fatigue_vals, width, label='Post-Fatigue', color='#9b59b6', alpha=0.8)
+    ax1.set_ylabel('8-12 Hz Band Power')
+    ax1.set_title('Postural: 8-12 Hz Band Power by Subject')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(subjects)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3, axis='y')
+
+    # Plot 2: Individual subject 8-12 Hz band power (Rest)
+    ax2 = fig.add_subplot(2, 2, 2)
+    rest_data = df[df['condition'] == 'rest'].set_index('subject')['band_power_8_12']
+    fat_rest_data = df[df['condition'] == 'fat_rest'].set_index('subject')['band_power_8_12']
+
+    baseline_vals = [rest_data.get(s, 0) for s in subjects]
+    fatigue_vals = [fat_rest_data.get(s, 0) for s in subjects]
+
+    ax2.bar(x - width / 2, baseline_vals, width, label='Baseline', color='#2ecc71', alpha=0.8)
+    ax2.bar(x + width / 2, fatigue_vals, width, label='Post-Fatigue', color='#e74c3c', alpha=0.8)
+    ax2.set_ylabel('8-12 Hz Band Power')
+    ax2.set_title('Rest: 8-12 Hz Band Power by Subject')
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(subjects)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3, axis='y')
+
+    # Plot 3: Paired comparison (Postural) with lines
+    ax3 = fig.add_subplot(2, 2, 3)
+    for i, subj in enumerate(subjects):
+        baseline = post_data.get(subj, np.nan)
+        fatigue = fat_post_data.get(subj, np.nan)
+        if not np.isnan(baseline) and not np.isnan(fatigue):
+            ax3.plot([0, 1], [baseline, fatigue], 'o-', color=f'C{i}',
+                     linewidth=2, markersize=8, label=subj)
+
+    ax3.set_xlim(-0.3, 1.3)
+    ax3.set_xticks([0, 1])
+    ax3.set_xticklabels(['Baseline', 'Post-Fatigue'])
+    ax3.set_ylabel('8-12 Hz Band Power')
+    ax3.set_title('Postural: Paired Comparison')
+    ax3.legend(loc='upper right')
+    ax3.grid(True, alpha=0.3)
+
+    if 'postural_8_12hz' in ttest_results:
+        res = ttest_results['postural_8_12hz']
+        sig_text = f"p = {res['p_value']:.4f}"
+        if res['significant']:
+            sig_text += " *"
+        ax3.text(0.5, 0.95, sig_text, transform=ax3.transAxes, ha='center',
+                 fontsize=11, fontweight='bold')
+
+    # Plot 4: Summary statistics
+    ax4 = fig.add_subplot(2, 2, 4)
+    ax4.axis('off')
+
+    summary_lines = ["STATISTICAL SUMMARY", "=" * 40, ""]
+
+    for key, res in ttest_results.items():
+        summary_lines.append(f"{res['comparison']}")
+        summary_lines.append(f"  Feature: {res['feature']}")
+        summary_lines.append(f"  N = {res['n_subjects']}")
+        summary_lines.append(f"  Baseline: {res['baseline_mean']:.6f} +/- {res['baseline_std']:.6f}")
+        summary_lines.append(f"  Fatigue:  {res['fatigue_mean']:.6f} +/- {res['fatigue_std']:.6f}")
+        summary_lines.append(f"  Change:   {res['percent_change']:+.2f}%")
+        summary_lines.append(f"  t = {res['t_statistic']:.3f}, p = {res['p_value']:.4f}")
+        sig = "SIGNIFICANT" if res['significant'] else "not significant"
+        summary_lines.append(f"  Result: {sig}")
+        summary_lines.append("")
+
+    summary_text = "\n".join(summary_lines)
+    ax4.text(0.1, 0.95, summary_text, transform=ax4.transAxes, fontsize=9,
+             verticalalignment='top', fontfamily='monospace',
+             bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.3))
+
+    plt.suptitle(f'Group Analysis: Effect of Forearm Fatigue on Tremor (N={n_subjects})',
+                 fontsize=13, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
