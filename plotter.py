@@ -159,8 +159,7 @@ def plot_subject_analysis_summary(raw_data, processed_signals, psd_data, results
         ax.set_title(f'Raw: {label}', fontsize=10)
         ax.set_ylabel('Acc (m/s2)')
         ax.grid(True, alpha=0.3)
-        if i >= 2:
-            ax.set_xlabel('Time (s)')
+        ax.set_xlabel('Time (s)')
 
     # Row 2: Processed signals
     for i, (cond, label, color) in enumerate(zip(conditions, condition_labels, colors)):
