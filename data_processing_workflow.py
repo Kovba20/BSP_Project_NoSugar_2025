@@ -131,6 +131,6 @@ if __name__ == "__main__":
 
     # Aggregate data and calculate statistics across all subjects
     all_data_df, ttest_results = analyze_all_subjects(subjects, data_dir)
-    all_data_df.to_csv('all_subjects_features.csv', index=False)
-    export_statistics(ttest_results, 'statistical_results.csv')
+    all_data_df.to_csv('.//results//all_subjects_features.csv', index=False)
+    export_statistics(ttest_results, './/results//statistical_results.csv')
 
